@@ -2,9 +2,99 @@ package progress
 
 import (
 	"maps"
+	"strings"
 
 	"../dict"
 )
+
+var (
+	letters = []rune{
+		'a',
+		'b',
+		'c',
+		'd',
+		'e',
+		'f',
+		'g',
+		'h',
+		'i',
+		'j',
+		'k',
+		'l',
+		'm',
+		'n',
+		'o',
+		'p',
+		'q',
+		'r',
+		's',
+		't',
+		'u',
+		'v',
+		'w',
+		'x',
+		'y',
+		'z',
+	}
+	conv = map[rune]rune{
+		'a': 'a',
+		'b': 'b',
+		'c': 'c',
+		'd': 'd',
+		'e': 'e',
+		'f': 'f',
+		'g': 'g',
+		'h': 'h',
+		'i': 'i',
+		'j': 'j',
+		'k': 'k',
+		'l': 'l',
+		'm': 'm',
+		'n': 'n',
+		'o': 'o',
+		'p': 'p',
+		'q': 'q',
+		'r': 'r',
+		's': 's',
+		't': 't',
+		'u': 'u',
+		'v': 'v',
+		'w': 'w',
+		'x': 'x',
+		'y': 'y',
+		'z': 'z',
+		'á': 'a',
+		'č': 'c',
+		'ď': 'd',
+		'é': 'e',
+		'ě': 'e',
+		'í': 'i',
+		'ň': 'n',
+		'ó': 'o',
+		'ř': 'r',
+		'š': 's',
+		'ť': 't',
+		'ú': 'u',
+		'ů': 'u',
+		'ý': 'y',
+		'ž': 'z',
+	}
+)
+
+func Conv(r rune) rune {
+	return conv[r]
+}
+
+func StripDiacritic(w string) string {
+	var b strings.Builder
+	for _, r := range w {
+		b.WriteRune(conv[r])
+	}
+	return b.String()
+}
+
+// variable písmeno je s háčkama
+// variable letter je bez háčků
 
 type LetterFreq struct {
 	f     int
@@ -13,16 +103,18 @@ type LetterFreq struct {
 }
 
 type PositionProgress struct {
-	solved bool
-	letter rune
-	left   map[rune]bool
+	solved  bool
+	písmeno rune
+	left    map[rune]bool
 }
 
-func (pp *PositionProgress) Valid(r rune) bool {
-	if pp.solved && pp.letter == r {
+func (pp *PositionProgress) valid(písmeno rune) bool {
+	if pp.solved && pp.písmeno == písmeno {
 		return true
 	}
-	if !pp.solved && pp.left[r] {
+
+	letter := conv[písmeno]
+	if !pp.solved && pp.left[letter] {
 		return true
 	}
 	return false
@@ -33,7 +125,7 @@ type Progress struct {
 	freq map[rune]*LetterFreq // frequency of letters for unsolved positions
 }
 
-func NewProgress(size int, letters []rune) *Progress {
+func NewProgress(size int) *Progress {
 	var progress Progress
 	progress.pos = make([]PositionProgress, size)
 	for i := 0; i < size; i++ {
@@ -75,7 +167,7 @@ func (p *Progress) ResetRound() {
 	p.freq = make(map[rune]*LetterFreq)
 }
 
-func (p *Progress) IncFreq(letter rune) {
+func (p *Progress) incFreq(letter rune) {
 	if p.freq[letter] == nil {
 		p.freq[letter] = new(LetterFreq)
 	}
@@ -91,44 +183,56 @@ func (p *Progress) Grey(i int, letter rune) {
 }
 
 func (p *Progress) Orange(i int, letter rune) {
-	p.IncFreq(letter)
+	p.incFreq(letter)
 	p.freq[letter].floor = true
 	p.pos[i].left[letter] = false
 }
 
-func (p *Progress) GreenOrange(i int, letter rune) {
-	p.IncFreq(letter)
+func (p *Progress) GreenOrange(i int, písmeno rune) {
+	letter := conv[písmeno]
+	p.incFreq(letter)
 	p.freq[letter].floor = true
-	p.Green(i, letter)
+	p.Green(i, písmeno)
 }
 
-func (p *Progress) Green(i int, letter rune) {
-	p.IncFreq(letter)
+func (p *Progress) Green(i int, písmeno rune) {
+	letter := conv[písmeno]
+	p.incFreq(letter)
 	p.pos[i].solved = true
-	p.pos[i].letter = letter
+	p.pos[i].písmeno = písmeno
 }
 
 func (p *Progress) Guess(word, solution string) {
+	solPísm := make([]rune, 5)
 	solLtrs := make([]rune, 5)
 	solLtrsPos := make(map[rune][]int, 5)
-	for i, r := range solution {
+	i := 0
+	for _, písmeno := range solution {
+		r := conv[písmeno]
+		solPísm[i] = písmeno
 		solLtrs[i] = r
 		solLtrsPos[r] = append(solLtrsPos[r], i)
+		i++
 	}
 
-	for i, r := range word {
+	i = 0
+	for _, písmeno := range word {
+		r := conv[písmeno]
 		if r == solLtrs[i] { // uhodnul jsem písmeno na pozici i
-			p.Green(i, r)
+			p.Green(i, solPísm[i])
 		} else { // písmeno r na pozici i je špatně
 			p.pos[i].left[r] = false
 		}
+		i++
 	}
 	// zjistime, jestli pismeno nemá být oranžové
-	for _, r := range word {
+	for _, písmeno := range word {
+		r := conv[písmeno]
 		var (
 			i, j     int
 			oranzova bool
 		)
+
 		for j, i = range solLtrsPos[r] {
 			if !p.pos[i].solved {
 				oranzova = true
@@ -144,7 +248,7 @@ func (p *Progress) Guess(word, solution string) {
 		}
 
 		if oranzova {
-			p.IncFreq(r)
+			p.incFreq(r)
 			p.freq[r].floor = true
 		} else { // pismenko r se na jine pozici ve slove nevyskytuje
 			if p.freq[r] == nil {
@@ -156,10 +260,11 @@ func (p *Progress) Guess(word, solution string) {
 
 }
 
-func (p *Progress) Valid(letters ...rune) bool {
+func (p *Progress) valid(písmena ...rune) bool {
 	freq := make(map[rune]int)
-	for _, r := range letters {
-		freq[r]++
+	for _, písmeno := range písmena {
+		letter := conv[písmeno]
+		freq[letter]++
 	}
 	for l, f := range p.freq {
 		if f.exact || !f.floor {
@@ -182,16 +287,16 @@ func (p *Progress) WordsLeft(words dict.Dictionary, list bool) (int, int, []stri
 	wordsLeft := make([]string, 0)
 
 	for l1, w1 := range words {
-		if p.pos[0].Valid(l1) {
+		if p.pos[0].valid(l1) {
 			for l2, w2 := range w1 {
-				if p.pos[1].Valid(l2) {
+				if p.pos[1].valid(l2) {
 					for l3, w3 := range w2 {
-						if p.pos[2].Valid(l3) {
+						if p.pos[2].valid(l3) {
 							for l4, w4 := range w3 {
-								if p.pos[3].Valid(l4) {
+								if p.pos[3].valid(l4) {
 									for l5, w5 := range w4 {
-										if p.pos[4].Valid(l5) {
-											if p.Valid(l1, l2, l3, l4, l5) {
+										if p.pos[4].valid(l5) {
+											if p.valid(l1, l2, l3, l4, l5) {
 												counter++
 												if !w5.Used {
 													counterNotUsed++

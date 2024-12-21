@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"./dict"
-	"./progress"
+	pr "./progress"
 )
 
 const (
@@ -53,35 +53,6 @@ type Tip struct {
 	Skill       Skills
 }
 
-var letters = []rune{
-	'a',
-	'b',
-	'c',
-	'd',
-	'e',
-	'f',
-	'g',
-	'h',
-	'i',
-	'j',
-	'k',
-	'l',
-	'm',
-	'n',
-	'o',
-	'p',
-	'q',
-	'r',
-	's',
-	't',
-	'u',
-	'v',
-	'w',
-	'x',
-	'y',
-	'z',
-}
-
 func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*Skill, error) {
 	luck := make(map[string]*LuckStat)
 	oldSkill := make(map[string]*int)
@@ -115,7 +86,7 @@ func CalculateOdds(
 	all []string,
 	history map[string]bool,
 	words dict.Dictionary,
-	ppr *progress.Progress,
+	ppr *pr.Progress,
 ) (
 	float64, float64, *LuckStat,
 ) {
@@ -128,7 +99,7 @@ func CalculateOdds(
 	for _, w := range all {
 		var counter, counterNotUsed int
 
-		if w != word {
+		if pr.StripDiacritic(w) != word {
 			pr := ppr.Clone()
 			pr.ResetRound()
 
@@ -194,7 +165,8 @@ func CalculateSkill(words []WeightedWord) map[string]*Skill {
 		if maxSk > 0 {
 			sk = (maxSk - s.sk) * 100 / maxSk
 		}
-		skill[s.w] = &Skill{Relative: sk, Difficulty: maxSk}
+		w := pr.StripDiacritic(s.w)
+		skill[w] = &Skill{Relative: sk, Difficulty: maxSk}
 	}
 
 	return skill
@@ -287,7 +259,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	words, err := dict.LoadDictionary("db.txt", history)
+	words, err := dict.LoadDictionary("db-hacky.txt", history)
 	if err != nil {
 		fmt.Println("loading words failed", err)
 		os.Exit(1)
@@ -312,7 +284,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	progress := progress.NewProgress(size, letters)
+	progress := pr.NewProgress(size)
 
 	stdIn := bufio.NewReader(os.Stdin)
 
@@ -352,6 +324,7 @@ func main() {
 				fmt.Println("\nInvalid character")
 				os.Exit(2)
 			}
+			word[j] = pr.Conv(word[j]) // odstranění diakritiky
 		}
 		stdIn.ReadLine() // read end of line
 
@@ -359,7 +332,7 @@ func main() {
 
 		counter, counterNotUsed, wordsLeft := progress.WordsLeft(words, true)
 
-		if counter == 1 && wordsLeft[0] == guessedWord {
+		if counter == 1 && pr.StripDiacritic(wordsLeft[0]) == guessedWord {
 			counter = 0
 			counterNotUsed = 0
 		}
@@ -377,10 +350,11 @@ func main() {
 			wordsLeftRobotWeighted := make([]WeightedWord, len(wordsLeft))
 			wordsLeftHumanWeighted := make([]WeightedWord, len(wordsLeft))
 
-			for j, w := range wordsLeft {
+			for j, slovo := range wordsLeft {
+				w := pr.StripDiacritic(slovo)
 				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, words, progress)
-				wordsLeftRobotWeighted[j] = WeightedWord{w, oddsRobot}
-				wordsLeftHumanWeighted[j] = WeightedWord{w, oddsHuman}
+				wordsLeftRobotWeighted[j] = WeightedWord{slovo, oddsRobot}
+				wordsLeftHumanWeighted[j] = WeightedWord{slovo, oddsHuman}
 				luck[w] = wordLuck
 			}
 

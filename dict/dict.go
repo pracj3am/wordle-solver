@@ -3,12 +3,7 @@ package dict
 import (
 	"bufio"
 	"os"
-	"unicode"
 	"unicode/utf8"
-
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
 )
 
 type DictionaryWord struct {
@@ -32,15 +27,15 @@ func LoadDictionary(filePath string, history map[string]bool) (Dictionary, error
 		word := s.Bytes()
 
 		i := 0
-		l1, s := utf8.DecodeRune(word[i:])
-		i += s
-		l2, s := utf8.DecodeRune(word[i:])
-		i += s
-		l3, s := utf8.DecodeRune(word[i:])
-		i += s
-		l4, s := utf8.DecodeRune(word[i:])
-		i += s
-		l5, s := utf8.DecodeRune(word[i:])
+		l1, t := utf8.DecodeRune(word[i:])
+		i += t
+		l2, t := utf8.DecodeRune(word[i:])
+		i += t
+		l3, t := utf8.DecodeRune(word[i:])
+		i += t
+		l4, t := utf8.DecodeRune(word[i:])
+		i += t
+		l5, t := utf8.DecodeRune(word[i:])
 
 		if words[l1] == nil {
 			words[l1] = make(map[rune]map[rune]map[rune]map[rune]*DictionaryWord)
@@ -55,7 +50,7 @@ func LoadDictionary(filePath string, history map[string]bool) (Dictionary, error
 			words[l1][l2][l3][l4] = make(map[rune]*DictionaryWord)
 		}
 		if words[l1][l2][l3][l4][l5] == nil {
-			w := string(word)
+			w := s.Text()
 			words[l1][l2][l3][l4][l5] = &DictionaryWord{w, history[w]}
 		}
 	}
@@ -72,12 +67,10 @@ func LoadHistory(filePath string) (map[string]bool, error) {
 	}
 	defer f.Close()
 
-	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	s := bufio.NewScanner(f)
 
 	for s.Scan() {
 		word := s.Text()
-		word, _, _ = transform.String(t, word)
 		words[word] = true
 	}
 
