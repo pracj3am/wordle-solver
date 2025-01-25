@@ -53,32 +53,32 @@ type Tip struct {
 	Skill       Skills
 }
 
-func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*Skill, error) {
+func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*Skill, map[string]*Skill, error) {
 	luck := make(map[string]*LuckStat)
-	oldSkill := make(map[string]*int)
+	skillRobot := make(map[string]*Skill)
+	skillHuman := make(map[string]*Skill)
 
 	f, err := os.Open(filePath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer f.Close()
 
 	dec := gob.NewDecoder(f)
 	err = dec.Decode(&luck)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	err = dec.Decode(&oldSkill)
+	err = dec.Decode(&skillRobot)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
+	}
+	err = dec.Decode(&skillHuman)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	skill := make(map[string]*Skill)
-	for w, sk := range oldSkill {
-		skill[w] = &Skill{Relative: *sk, Difficulty: -1}
-	}
-
-	return luck, skill, nil
+	return luck, skillRobot, skillHuman, nil
 }
 
 func CalculateOdds(
@@ -265,8 +265,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	skillHuman := make(map[string]*Skill)
-	luck, skillRobot, err := LoadLuck("luck.gob")
+	luck, skillRobot, skillHuman, err := LoadLuck("luck.gob")
 	if err != nil {
 		fmt.Println("loading luck failed", err)
 		os.Exit(1)
