@@ -159,6 +159,8 @@ func main() {
 			wordsLeftRobotWeighted[j] = WeightedWord{slovo, oddsRobot}
 			wordsLeftHumanWeighted[j] = WeightedWord{slovo, oddsHuman}
 			luck[w] = wordLuck
+
+			fmt.Print(".")
 		}
 
 		sort.Sort(ByWeight(wordsLeftHumanWeighted))
