@@ -110,7 +110,7 @@ func CalculateSkill(words []WeightedWord) map[string]*Skill {
 }
 
 func LoadDictionary(filePath string) ([]string, error) {
-	words := make([]string, 2000)
+	words := make([]string, 0, 2000)
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
