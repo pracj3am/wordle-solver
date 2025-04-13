@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"./dict"
+	"./odds"
 	pr "./progress"
 )
 
@@ -19,30 +20,14 @@ const (
 	size = 5
 )
 
-type WeightedWord struct {
-	Word   string
-	Weight float64
-}
-
-type ByWeight []WeightedWord
-
-func (a ByWeight) Len() int           { return len(a) }
-func (a ByWeight) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByWeight) Less(i, j int) bool { return a[i].Weight < a[j].Weight }
-
 type LuckStat struct {
 	Histogram map[int]int
 	Sum       float64
 }
 
-type Skill struct {
-	Relative   int
-	Difficulty int
-}
-
 type Skills struct {
-	Robot *Skill
-	Human *Skill // human nezná použitý slova
+	Robot *odds.Skill
+	Human *odds.Skill // human nezná použitý slova
 }
 
 type Tip struct {
@@ -53,10 +38,10 @@ type Tip struct {
 	Skill       Skills
 }
 
-func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*Skill, map[string]*Skill, error) {
+func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*odds.Skill, map[string]*odds.Skill, error) {
 	luck := make(map[string]*LuckStat)
-	skillRobot := make(map[string]*Skill)
-	skillHuman := make(map[string]*Skill)
+	skillRobot := make(map[string]*odds.Skill)
+	skillHuman := make(map[string]*odds.Skill)
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -138,45 +123,13 @@ func makeString(word []rune) string {
 	return string(buf)
 }
 
-func CalculateSkill(words []WeightedWord) map[string]*Skill {
-	skill := make(map[string]*Skill)
-	tmpSkill := make([]struct {
-		w  string
-		sk int
-	}, len(words))
-
-	sk := 0
-	wg := words[0].Weight
-
-	for i, w := range words {
-		if w.Weight > wg {
-			sk++
-			wg = w.Weight
-		}
-		tmpSkill[i].w = w.Word
-		tmpSkill[i].sk = sk
-	}
-
-	maxSk := sk
-	for _, s := range tmpSkill {
-		sk := 0
-		if maxSk > 0 {
-			sk = (maxSk - s.sk) * 100 / maxSk
-		}
-		w := pr.StripDiacritic(s.w)
-		skill[w] = &Skill{Relative: sk, Difficulty: maxSk}
-	}
-
-	return skill
-}
-
 func AppendTip(
 	tips []Tip,
 	word string,
 	counter, counterNotUsed int,
 	luck map[string]*LuckStat,
-	skillRobot map[string]*Skill,
-	skillHuman map[string]*Skill,
+	skillRobot map[string]*odds.Skill,
+	skillHuman map[string]*odds.Skill,
 ) []Tip {
 	tip := Tip{
 		Word:        word,
@@ -348,22 +301,22 @@ func main() {
 
 		if counter < 1000 {
 			// jinak se to počítá moc dlouho
-			wordsLeftRobotWeighted := make([]WeightedWord, len(wordsLeft))
-			wordsLeftHumanWeighted := make([]WeightedWord, len(wordsLeft))
+			wordsLeftRobotWeighted := make([]odds.WeightedWord, len(wordsLeft))
+			wordsLeftHumanWeighted := make([]odds.WeightedWord, len(wordsLeft))
 
 			for j, slovo := range wordsLeft {
 				w := pr.StripDiacritic(slovo)
 				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, progress)
-				wordsLeftRobotWeighted[j] = WeightedWord{slovo, oddsRobot}
-				wordsLeftHumanWeighted[j] = WeightedWord{slovo, oddsHuman}
+				wordsLeftRobotWeighted[j] = odds.WeightedWord{slovo, oddsRobot}
+				wordsLeftHumanWeighted[j] = odds.WeightedWord{slovo, oddsHuman}
 				luck[w] = wordLuck
 			}
 
-			sort.Sort(ByWeight(wordsLeftHumanWeighted))
-			skillHuman = CalculateSkill(wordsLeftHumanWeighted)
+			sort.Sort(odds.ByWeight(wordsLeftHumanWeighted))
+			skillHuman = odds.CalculateSkill(wordsLeftHumanWeighted)
 
-			sort.Sort(ByWeight(wordsLeftRobotWeighted))
-			skillRobot = CalculateSkill(wordsLeftRobotWeighted)
+			sort.Sort(odds.ByWeight(wordsLeftRobotWeighted))
+			skillRobot = odds.CalculateSkill(wordsLeftRobotWeighted)
 
 			for _, w := range wordsLeftRobotWeighted {
 				if history[w.Word] {
