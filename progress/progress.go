@@ -121,12 +121,13 @@ func (pp *PositionProgress) valid(písmeno rune) bool {
 }
 
 type Progress struct {
-	pos  []PositionProgress
-	freq map[rune]*LetterFreq // frequency of letters for unsolved positions
+	words dict.Dictionary
+	pos   []PositionProgress
+	freq  map[rune]*LetterFreq // frequency of letters for unsolved positions
 }
 
-func NewProgress(size int) *Progress {
-	var progress Progress
+func NewProgress(size int, words dict.Dictionary) *Progress {
+	var progress = Progress{words: words}
 	progress.pos = make([]PositionProgress, size)
 	for i := 0; i < size; i++ {
 		progress.pos[i].left = make(map[rune]bool)
@@ -139,7 +140,7 @@ func NewProgress(size int) *Progress {
 }
 
 func (p *Progress) Clone() *Progress {
-	var p1 Progress
+	var p1 = Progress{words: p.words}
 	p1.freq = p.freq
 	p1.pos = make([]PositionProgress, len(p.pos))
 	for i := range p.pos {
@@ -281,12 +282,12 @@ func (p *Progress) valid(písmena ...rune) bool {
 	return true
 }
 
-func (p *Progress) WordsLeft(words dict.Dictionary, list bool) (int, int, []string) {
+func (p *Progress) WordsLeft(list bool) (int, int, []string) {
 	counter := 0
 	counterNotUsed := 0
 	wordsLeft := make([]string, 0)
 
-	for l1, w1 := range words {
+	for l1, w1 := range p.words {
 		if p.pos[0].valid(l1) {
 			for l2, w2 := range w1 {
 				if p.pos[1].valid(l2) {

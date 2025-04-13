@@ -42,7 +42,6 @@ func CalculateOdds(
 	word string,
 	all []string,
 	history map[string]bool,
-	words dict.Dictionary,
 	ppr *pr.Progress,
 ) (
 	float64, float64, *LuckStat,
@@ -61,7 +60,7 @@ func CalculateOdds(
 			pr.ResetRound()
 
 			pr.Guess(word, w)
-			counter, counterNotUsed, _ = pr.WordsLeft(words, false)
+			counter, counterNotUsed, _ = pr.WordsLeft(false)
 		}
 
 		sum += float64(counter)
@@ -147,7 +146,7 @@ func main() {
 	luck := make(map[string]*LuckStat)
 	skillHuman := make(map[string]*Skill)
 	skillRobot := make(map[string]*Skill)
-	progress := pr.NewProgress(5)
+	progress := pr.NewProgress(5, words)
 
 	for i := 1; i <= 1; i++ {
 		wordsLeftRobotWeighted := make([]WeightedWord, len(all))
@@ -155,7 +154,7 @@ func main() {
 
 		for j, slovo := range all {
 			w := pr.StripDiacritic(slovo)
-			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, all, history, words, progress)
+			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, all, history, progress)
 			wordsLeftRobotWeighted[j] = WeightedWord{slovo, oddsRobot}
 			wordsLeftHumanWeighted[j] = WeightedWord{slovo, oddsHuman}
 			luck[w] = wordLuck

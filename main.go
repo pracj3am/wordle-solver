@@ -85,7 +85,6 @@ func CalculateOdds(
 	word string,
 	all []string,
 	history map[string]bool,
-	words dict.Dictionary,
 	ppr *pr.Progress,
 ) (
 	float64, float64, *LuckStat,
@@ -108,14 +107,13 @@ func CalculateOdds(
 			/*
 				if word == "jehne" {
 					var list []string
-					counter, counterNotUsed, list = pr.WordsLeft(words, true)
+					counter, counterNotUsed, list = pr.WordsLeft(true)
 					fmt.Printf("%s + %s: ", word, w)
 					fmt.Println(list)
 
 				} else {
 			*/
-
-			counter, counterNotUsed, _ = pr.WordsLeft(words, false)
+			counter, counterNotUsed, _ = pr.WordsLeft(false)
 		}
 
 		sum += float64(counter)
@@ -287,7 +285,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	progress := pr.NewProgress(size)
+	progress := pr.NewProgress(size, words)
 
 	stdIn := bufio.NewReader(os.Stdin)
 
@@ -333,7 +331,7 @@ func main() {
 
 		guessedWord := makeString(word)
 
-		counter, counterNotUsed, wordsLeft := progress.WordsLeft(words, true)
+		counter, counterNotUsed, wordsLeft := progress.WordsLeft(true)
 
 		if counter == 1 && pr.StripDiacritic(wordsLeft[0]) == guessedWord {
 			counter = 0
@@ -355,7 +353,7 @@ func main() {
 
 			for j, slovo := range wordsLeft {
 				w := pr.StripDiacritic(slovo)
-				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, words, progress)
+				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, progress)
 				wordsLeftRobotWeighted[j] = WeightedWord{slovo, oddsRobot}
 				wordsLeftHumanWeighted[j] = WeightedWord{slovo, oddsHuman}
 				luck[w] = wordLuck
