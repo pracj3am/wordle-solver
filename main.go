@@ -189,16 +189,20 @@ func AppendTip(
 	if wordLuck, found := luck[word]; found {
 		var sumBetter int
 		var sumWorse int
+		var countBetter int
 		for histLeft, histCount := range wordLuck.Histogram {
 			if histLeft <= counterNotUsed {
 				sumBetter += histCount
+				if histLeft > 0 {
+					countBetter++
+				}
 			} else {
 				sumWorse += histCount
 			}
 		}
 
 		luck := -1.0
-		if sumWorse > 0 {
+		if sumWorse > 0 || countBetter > 1 {
 			luck = 100 - 100*float64(sumBetter)/(wordLuck.Sum)
 		}
 		tip.Luck = &luck
