@@ -94,6 +94,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	solutions, err := LoadDictionary("db-hacky.txt")
+	if err != nil {
+		fmt.Println("loading all words failed", err)
+		os.Exit(1)
+	}
+
 	all, err := LoadDictionary("db.txt")
 	if err != nil {
 		fmt.Println("loading all words failed", err)
@@ -110,7 +116,7 @@ func main() {
 		wordsLeftHumanWeighted := make([]odds.WeightedWord, len(all))
 
 		for j, w := range all {
-			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, all, history, progress)
+			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, solutions, history, progress)
 			wordsLeftRobotWeighted[j] = odds.WeightedWord{w, oddsRobot}
 			wordsLeftHumanWeighted[j] = odds.WeightedWord{w, oddsHuman}
 			luck[w] = wordLuck
