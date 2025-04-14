@@ -82,25 +82,25 @@ func LoadDictionary(filePath string) ([]string, error) {
 }
 
 func main() {
-	history, err := dict.LoadHistory("used.txt")
+	history, err := dict.LoadHistory("../used.txt")
 	if err != nil {
 		fmt.Println("loading history failed", err)
 		os.Exit(1)
 	}
 
-	words, err := dict.LoadDictionary("db-hacky.txt", history)
+	words, err := dict.LoadDictionary("../db-hacky.txt", history)
 	if err != nil {
 		fmt.Println("loading words failed", err)
 		os.Exit(1)
 	}
 
-	solutions, err := LoadDictionary("db-hacky.txt")
+	solutions, err := LoadDictionary("../db-hacky.txt")
 	if err != nil {
 		fmt.Println("loading all words failed", err)
 		os.Exit(1)
 	}
 
-	all, err := LoadDictionary("db.txt")
+	all, err := LoadDictionary("../db.txt")
 	if err != nil {
 		fmt.Println("loading all words failed", err)
 		os.Exit(1)
