@@ -50,25 +50,24 @@ type PositionProgress struct {
 	left    map[rune]bool
 }
 
-func (pp *PositionProgress) valid(písmeno rune) bool {
-	if pp.solved && pp.písmeno == písmeno {
+func (pp *PositionProgress) valid(index int) bool {
+	if pp.solved && pp.písmeno == dict.Písmena[index] {
 		return true
 	}
 
-	letter := dict.Conv[písmeno]
-	if !pp.solved && pp.left[letter] {
+	if !pp.solved && pp.left[dict.Letters[index]] {
 		return true
 	}
 	return false
 }
 
 type Progress struct {
-	words dict.Dictionary
+	words *dict.Dictionary
 	pos   []PositionProgress
 	freq  map[rune]*LetterFreq // frequency of letters for unsolved positions
 }
 
-func NewProgress(size int, words dict.Dictionary) *Progress {
+func NewProgress(size int, words *dict.Dictionary) *Progress {
 	var progress = Progress{words: words}
 	progress.pos = make([]PositionProgress, size)
 	for i := 0; i < size; i++ {
@@ -203,24 +202,24 @@ func (p *Progress) Guess(word, solution string) {
 
 }
 
-func freq(l rune, písmena []rune) int {
+func freq(l rune, indexes []int) int {
 	freq := 0
-	for _, písmeno := range písmena {
-		if l == dict.Conv[písmeno] {
+	for _, idx := range indexes {
+		if l == dict.Letters[idx] {
 			freq++
 		}
 	}
 	return freq
 }
 
-func (p *Progress) valid(písmena ...rune) bool {
+func (p *Progress) valid(indexes ...int) bool {
 	for l, f := range p.freq {
 		if f.exact || !f.floor {
-			if f.f != freq(l, písmena) {
+			if f.f != freq(l, indexes) {
 				return false
 			}
 		} else { // f.floor
-			if f.f > freq(l, písmena) {
+			if f.f > freq(l, indexes) {
 				return false
 			}
 		}
@@ -234,23 +233,39 @@ func (p *Progress) WordsLeft(list bool) (int, int, []string) {
 	counterNotUsed := 0
 	wordsLeft := make([]string, 0)
 
-	for l1, w1 := range p.words {
+	for l1, w1 := range p.words.First {
+		if w1 == nil {
+			continue
+		}
 		if p.pos[0].valid(l1) {
-			for l2, w2 := range w1 {
+			for l2, w2 := range w1.Next {
+				if w2 == nil {
+					continue
+				}
 				if p.pos[1].valid(l2) {
-					for l3, w3 := range w2 {
+					for l3, w3 := range w2.Next {
+						if w3 == nil {
+							continue
+						}
 						if p.pos[2].valid(l3) {
-							for l4, w4 := range w3 {
+							for l4, w4 := range w3.Next {
+								if w4 == nil {
+									continue
+								}
 								if p.pos[3].valid(l4) {
-									for l5, w5 := range w4 {
+									for l5, w5 := range w4.Next {
+										if w5 == nil {
+											continue
+										}
 										if p.pos[4].valid(l5) {
 											if p.valid(l1, l2, l3, l4, l5) {
 												counter++
-												if !w5.Used {
+												word := w5.Word
+												if !word.Used {
 													counterNotUsed++
 												}
 												if list {
-													wordsLeft = append(wordsLeft, w5.Word)
+													wordsLeft = append(wordsLeft, word.Word)
 												}
 											}
 										}
