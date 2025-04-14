@@ -1,39 +1,10 @@
 package progress
 
 import (
-	"maps"
+	"slices"
 
 	"../dict"
 )
-
-var letters = []rune{
-	'a',
-	'b',
-	'c',
-	'd',
-	'e',
-	'f',
-	'g',
-	'h',
-	'i',
-	'j',
-	'k',
-	'l',
-	'm',
-	'n',
-	'o',
-	'p',
-	'q',
-	'r',
-	's',
-	't',
-	'u',
-	'v',
-	'w',
-	'x',
-	'y',
-	'z',
-}
 
 // variable písmeno je s háčkama
 // variable letter je bez háčků
@@ -47,7 +18,7 @@ type LetterFreq struct {
 type PositionProgress struct {
 	solved  bool
 	písmeno rune
-	left    map[rune]bool
+	left    []bool // indexed by letter index
 }
 
 func (pp *PositionProgress) valid(index int) bool {
@@ -55,25 +26,27 @@ func (pp *PositionProgress) valid(index int) bool {
 		return true
 	}
 
-	if !pp.solved && pp.left[dict.Letters[index]] {
+	if !pp.solved && pp.left[dict.ConvIndex[index]] {
 		return true
 	}
+
 	return false
 }
 
 type Progress struct {
 	words *dict.Dictionary
 	pos   []PositionProgress
-	freq  map[rune]*LetterFreq // frequency of letters for unsolved positions
+	freq  []LetterFreq // index by letter index: frequency of letters for unsolved positions
 }
 
 func NewProgress(size int, words *dict.Dictionary) *Progress {
 	var progress = Progress{words: words}
 	progress.pos = make([]PositionProgress, size)
+	progress.freq = make([]LetterFreq, 26)
 	for i := 0; i < size; i++ {
-		progress.pos[i].left = make(map[rune]bool)
-		for _, l := range letters {
-			progress.pos[i].left[l] = true
+		progress.pos[i].left = make([]bool, 26)
+		for j := range progress.pos[i].left {
+			progress.pos[i].left[j] = true
 		}
 	}
 
@@ -87,7 +60,7 @@ func (p *Progress) Clone() *Progress {
 	for i := range p.pos {
 		p1.pos[i] = p.pos[i]
 		if !p.pos[i].solved {
-			p1.pos[i].left = maps.Clone(p.pos[i].left)
+			p1.pos[i].left = slices.Clone(p.pos[i].left)
 		} else {
 			p1.pos[i].left = nil
 		}
@@ -97,49 +70,42 @@ func (p *Progress) Clone() *Progress {
 }
 
 func (p *Progress) ResetRound() {
-	for l, f := range p.freq {
+	for j, f := range p.freq {
 		if f.exact && f.f == 0 {
 			for i := range p.pos {
 				if p.pos[i].left != nil {
-					p.pos[i].left[l] = false
+					p.pos[i].left[j] = false
 				}
 			}
 		}
 	}
-	p.freq = make(map[rune]*LetterFreq)
-}
 
-func (p *Progress) incFreq(letter rune) {
-	if p.freq[letter] == nil {
-		p.freq[letter] = new(LetterFreq)
-	}
-	p.freq[letter].f++
+	p.freq = make([]LetterFreq, 26)
 }
 
 func (p *Progress) Grey(i int, letter rune) {
-	if p.freq[letter] == nil {
-		p.freq[letter] = new(LetterFreq)
-	}
-	p.freq[letter].exact = true
-	p.pos[i].left[letter] = false
+	index := dict.Indexes[letter]
+	p.freq[index].exact = true
+	p.pos[i].left[index] = false
 }
 
 func (p *Progress) Orange(i int, letter rune) {
-	p.incFreq(letter)
-	p.freq[letter].floor = true
-	p.pos[i].left[letter] = false
+	index := dict.Indexes[letter]
+	p.freq[index].f++
+	p.freq[index].floor = true
+	p.pos[i].left[index] = false
 }
 
 func (p *Progress) GreenOrange(i int, písmeno rune) {
-	letter := dict.Conv[písmeno]
-	p.incFreq(letter)
-	p.freq[letter].floor = true
+	index := dict.ConvIndex[dict.Indexes[písmeno]]
+	p.freq[index].f++
+	p.freq[index].floor = true
 	p.Green(i, písmeno)
 }
 
 func (p *Progress) Green(i int, písmeno rune) {
-	letter := dict.Conv[písmeno]
-	p.incFreq(letter)
+	index := dict.ConvIndex[dict.Indexes[písmeno]]
+	p.freq[index].f++
 	p.pos[i].solved = true
 	p.pos[i].písmeno = písmeno
 }
@@ -163,7 +129,7 @@ func (p *Progress) Guess(word, solution string) {
 		if r == solLtrs[i] { // uhodnul jsem písmeno na pozici i
 			p.Green(i, solPísm[i])
 		} else { // písmeno r na pozici i je špatně
-			p.pos[i].left[r] = false
+			p.pos[i].left[dict.ConvIndex[dict.Indexes[písmeno]]] = false
 		}
 		i++
 	}
@@ -189,23 +155,21 @@ func (p *Progress) Guess(word, solution string) {
 			solLtrsPos[r] = nil
 		}
 
+		index := dict.ConvIndex[dict.Indexes[písmeno]]
 		if oranzova {
-			p.incFreq(r)
-			p.freq[r].floor = true
+			p.freq[index].f++
+			p.freq[index].floor = true
 		} else { // pismenko r se na jine pozici ve slove nevyskytuje
-			if p.freq[r] == nil {
-				p.freq[r] = new(LetterFreq)
-			}
-			p.freq[r].exact = true
+			p.freq[index].exact = true
 		}
 	}
 
 }
 
-func freq(l rune, indexes []int) int {
+func freq(i int, indexes []int) int {
 	freq := 0
 	for _, idx := range indexes {
-		if l == dict.Letters[idx] {
+		if i == dict.ConvIndex[idx] {
 			freq++
 		}
 	}
@@ -213,13 +177,13 @@ func freq(l rune, indexes []int) int {
 }
 
 func (p *Progress) valid(indexes ...int) bool {
-	for l, f := range p.freq {
-		if f.exact || !f.floor {
-			if f.f != freq(l, indexes) {
+	for i, f := range p.freq {
+		if f.exact || (!f.floor && f.f > 0) {
+			if f.f != freq(i, indexes) {
 				return false
 			}
-		} else { // f.floor
-			if f.f > freq(l, indexes) {
+		} else if f.floor {
+			if f.f > freq(i, indexes) {
 				return false
 			}
 		}

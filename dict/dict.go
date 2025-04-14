@@ -92,7 +92,7 @@ var Písmena = [41]rune{
 	'ý',
 	'ž',
 }
-var indexes = map[rune]int{
+var Indexes = map[rune]int{
 	'a': 0,
 	'b': 1,
 	'c': 2,
@@ -174,7 +174,7 @@ func LoadDictionary(filePath string, history map[string]bool) (*Dictionary, erro
 		i += t
 		l5, t := utf8.DecodeRune(word[i:])
 
-		i1, i2, i3, i4, i5 := indexes[l1], indexes[l2], indexes[l3], indexes[l4], indexes[l5]
+		i1, i2, i3, i4, i5 := Indexes[l1], Indexes[l2], Indexes[l3], Indexes[l4], Indexes[l5]
 
 		if words.First[i1] == nil {
 			words.First[i1] = new(nextLetter)
