@@ -40,7 +40,7 @@ func CalculateOdds(
 	for _, w := range all {
 		var counter, counterNotUsed int
 
-		if pr.StripDiacritic(w) != word {
+		if dict.StripDiacritic(w) != word {
 			pr := ppr.Clone()
 			pr.ResetRound()
 

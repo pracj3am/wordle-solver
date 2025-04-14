@@ -2,95 +2,37 @@ package progress
 
 import (
 	"maps"
-	"strings"
 
 	"../dict"
 )
 
-var (
-	letters = []rune{
-		'a',
-		'b',
-		'c',
-		'd',
-		'e',
-		'f',
-		'g',
-		'h',
-		'i',
-		'j',
-		'k',
-		'l',
-		'm',
-		'n',
-		'o',
-		'p',
-		'q',
-		'r',
-		's',
-		't',
-		'u',
-		'v',
-		'w',
-		'x',
-		'y',
-		'z',
-	}
-	conv = map[rune]rune{
-		'a': 'a',
-		'b': 'b',
-		'c': 'c',
-		'd': 'd',
-		'e': 'e',
-		'f': 'f',
-		'g': 'g',
-		'h': 'h',
-		'i': 'i',
-		'j': 'j',
-		'k': 'k',
-		'l': 'l',
-		'm': 'm',
-		'n': 'n',
-		'o': 'o',
-		'p': 'p',
-		'q': 'q',
-		'r': 'r',
-		's': 's',
-		't': 't',
-		'u': 'u',
-		'v': 'v',
-		'w': 'w',
-		'x': 'x',
-		'y': 'y',
-		'z': 'z',
-		'á': 'a',
-		'č': 'c',
-		'ď': 'd',
-		'é': 'e',
-		'ě': 'e',
-		'í': 'i',
-		'ň': 'n',
-		'ó': 'o',
-		'ř': 'r',
-		'š': 's',
-		'ť': 't',
-		'ú': 'u',
-		'ů': 'u',
-		'ý': 'y',
-		'ž': 'z',
-	}
-)
-
-func Conv(r rune) rune {
-	return conv[r]
-}
-
-func StripDiacritic(w string) string {
-	var b strings.Builder
-	for _, r := range w {
-		b.WriteRune(conv[r])
-	}
-	return b.String()
+var letters = []rune{
+	'a',
+	'b',
+	'c',
+	'd',
+	'e',
+	'f',
+	'g',
+	'h',
+	'i',
+	'j',
+	'k',
+	'l',
+	'm',
+	'n',
+	'o',
+	'p',
+	'q',
+	'r',
+	's',
+	't',
+	'u',
+	'v',
+	'w',
+	'x',
+	'y',
+	'z',
 }
 
 // variable písmeno je s háčkama
@@ -113,7 +55,7 @@ func (pp *PositionProgress) valid(písmeno rune) bool {
 		return true
 	}
 
-	letter := conv[písmeno]
+	letter := dict.Conv[písmeno]
 	if !pp.solved && pp.left[letter] {
 		return true
 	}
@@ -190,14 +132,14 @@ func (p *Progress) Orange(i int, letter rune) {
 }
 
 func (p *Progress) GreenOrange(i int, písmeno rune) {
-	letter := conv[písmeno]
+	letter := dict.Conv[písmeno]
 	p.incFreq(letter)
 	p.freq[letter].floor = true
 	p.Green(i, písmeno)
 }
 
 func (p *Progress) Green(i int, písmeno rune) {
-	letter := conv[písmeno]
+	letter := dict.Conv[písmeno]
 	p.incFreq(letter)
 	p.pos[i].solved = true
 	p.pos[i].písmeno = písmeno
@@ -209,7 +151,7 @@ func (p *Progress) Guess(word, solution string) {
 	solLtrsPos := make(map[rune][]int, 5)
 	i := 0
 	for _, písmeno := range solution {
-		r := conv[písmeno]
+		r := dict.Conv[písmeno]
 		solPísm[i] = písmeno
 		solLtrs[i] = r
 		solLtrsPos[r] = append(solLtrsPos[r], i)
@@ -218,7 +160,7 @@ func (p *Progress) Guess(word, solution string) {
 
 	i = 0
 	for _, písmeno := range word {
-		r := conv[písmeno]
+		r := dict.Conv[písmeno]
 		if r == solLtrs[i] { // uhodnul jsem písmeno na pozici i
 			p.Green(i, solPísm[i])
 		} else { // písmeno r na pozici i je špatně
@@ -228,7 +170,7 @@ func (p *Progress) Guess(word, solution string) {
 	}
 	// zjistime, jestli pismeno nemá být oranžové
 	for _, písmeno := range word {
-		r := conv[písmeno]
+		r := dict.Conv[písmeno]
 		var (
 			i, j     int
 			oranzova bool
@@ -264,7 +206,7 @@ func (p *Progress) Guess(word, solution string) {
 func (p *Progress) valid(písmena ...rune) bool {
 	freq := make(map[rune]int)
 	for _, písmeno := range písmena {
-		letter := conv[písmeno]
+		letter := dict.Conv[písmeno]
 		freq[letter]++
 	}
 	for l, f := range p.freq {

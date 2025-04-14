@@ -83,7 +83,7 @@ func CalculateOdds(
 	for _, w := range all {
 		var counter, counterNotUsed int
 
-		if pr.StripDiacritic(w) != word {
+		if dict.StripDiacritic(w) != word {
 			pr := ppr.Clone()
 			pr.ResetRound()
 
@@ -278,7 +278,7 @@ func main() {
 				fmt.Println("\nInvalid character")
 				os.Exit(2)
 			}
-			word[j] = pr.Conv(word[j]) // odstranění diakritiky
+			word[j] = dict.Conv[word[j]] // odstranění diakritiky
 		}
 		stdIn.ReadLine() // read end of line
 
@@ -286,7 +286,7 @@ func main() {
 
 		counter, counterNotUsed, wordsLeft := progress.WordsLeft(true)
 
-		if counter == 1 && pr.StripDiacritic(wordsLeft[0]) == guessedWord {
+		if counter == 1 && dict.StripDiacritic(wordsLeft[0]) == guessedWord {
 			counter = 0
 			counterNotUsed = 0
 		}
@@ -305,7 +305,7 @@ func main() {
 			wordsLeftHumanWeighted := make([]odds.WeightedWord, len(wordsLeft))
 
 			for j, slovo := range wordsLeft {
-				w := pr.StripDiacritic(slovo)
+				w := dict.StripDiacritic(slovo)
 				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, progress)
 				wordsLeftRobotWeighted[j] = odds.WeightedWord{slovo, oddsRobot}
 				wordsLeftHumanWeighted[j] = odds.WeightedWord{slovo, oddsHuman}

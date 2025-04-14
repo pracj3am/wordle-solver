@@ -1,7 +1,7 @@
 package odds
 
 import (
-	pr "../progress"
+	"../dict"
 )
 
 type Skill struct {
@@ -45,7 +45,7 @@ func CalculateSkill(words []WeightedWord) map[string]*Skill {
 		if maxSk > 0 {
 			sk = (maxSk - s.sk) * 100 / maxSk
 		}
-		w := pr.StripDiacritic(s.w)
+		w := dict.StripDiacritic(s.w)
 		skill[w] = &Skill{Relative: sk, Difficulty: maxSk}
 	}
 
