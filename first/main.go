@@ -46,6 +46,10 @@ func CalculateOdds(
 
 			pr.Guess(word, w)
 			counter, counterNotUsed, _ = pr.WordsLeft(false)
+
+			if counterNotUsed == 0 && !history[w] {
+				panic(fmt.Sprintf("%s + %s: counter 0", word, w))
+			}
 		}
 
 		sum += float64(counter)
