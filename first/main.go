@@ -121,7 +121,7 @@ func main() {
 			wordsLeftHumanWeighted[j] = odds.WeightedWord{w, oddsHuman}
 			luck[w] = wordLuck
 
-			fmt.Print(".")
+			fmt.Printf("%d/%d\n", j, len(all))
 		}
 
 		sort.Sort(odds.ByWeight(wordsLeftHumanWeighted))
