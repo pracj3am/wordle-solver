@@ -203,19 +203,24 @@ func (p *Progress) Guess(word, solution string) {
 
 }
 
-func (p *Progress) valid(písmena ...rune) bool {
-	freq := make(map[rune]int)
+func freq(l rune, písmena []rune) int {
+	freq := 0
 	for _, písmeno := range písmena {
-		letter := dict.Conv[písmeno]
-		freq[letter]++
+		if l == dict.Conv[písmeno] {
+			freq++
+		}
 	}
+	return freq
+}
+
+func (p *Progress) valid(písmena ...rune) bool {
 	for l, f := range p.freq {
 		if f.exact || !f.floor {
-			if f.f != freq[l] {
+			if f.f != freq(l, písmena) {
 				return false
 			}
 		} else { // f.floor
-			if f.f > freq[l] {
+			if f.f > freq(l, písmena) {
 				return false
 			}
 		}
