@@ -1,6 +1,8 @@
 package odds
 
 import (
+	"math"
+
 	"../dict"
 )
 
@@ -22,31 +24,24 @@ func (a ByWeight) Less(i, j int) bool { return a[i].Weight < a[j].Weight }
 
 func CalculateSkill(words []WeightedWord) map[string]*Skill {
 	skill := make(map[string]*Skill)
-	tmpSkill := make([]struct {
-		w  string
-		sk int
-	}, len(words))
 
-	sk := 0
-	wg := words[0].Weight
+	minW := words[0].Weight
+	maxW := words[len(words)-1].Weight
+	diff := 0
+	diffInv := 0.0
 
-	for i, w := range words {
-		if w.Weight > wg {
-			sk++
-			wg = w.Weight
-		}
-		tmpSkill[i].w = w.Word
-		tmpSkill[i].sk = sk
+	if minW > 0 {
+		diff = int(math.Round(10 * (maxW - minW) / minW))
+		diffInv = 100.0 / (maxW - minW)
 	}
 
-	maxSk := sk
-	for _, s := range tmpSkill {
+	for _, w := range words {
 		sk := 0
-		if maxSk > 0 {
-			sk = (maxSk - s.sk) * 100 / maxSk
+		if diff > 0 {
+			sk = 100 - int(math.Round((w.Weight-minW)*diffInv))
 		}
-		w := dict.StripDiacritic(s.w)
-		skill[w] = &Skill{Relative: sk, Difficulty: maxSk}
+		w := dict.StripDiacritic(w.Word)
+		skill[w] = &Skill{Relative: sk, Difficulty: diff}
 	}
 
 	return skill
