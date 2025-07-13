@@ -137,8 +137,9 @@ var Indexes = map[rune]int{
 }
 
 type DictionaryWord struct {
-	Word string
-	Used bool
+	Word              string
+	WithoutDiacritics string
+	Used              bool
 }
 
 type nextLetter struct {
@@ -191,7 +192,11 @@ func LoadDictionary(filePath string, history map[string]bool) (*Dictionary, erro
 		if words.First[i1].Next[i2].Next[i3].Next[i4].Next[i5] == nil {
 			lastLetter := new(nextLetter)
 			w := s.Text()
-			lastLetter.Word = &DictionaryWord{w, history[w]}
+			lastLetter.Word = &DictionaryWord{
+				Word:              w,
+				WithoutDiacritics: StripDiacritic(w),
+				Used:              history[w],
+			}
 			words.First[i1].Next[i2].Next[i3].Next[i4].Next[i5] = lastLetter
 		}
 	}

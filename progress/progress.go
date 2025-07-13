@@ -196,6 +196,8 @@ func (p *Progress) WordsLeft(list bool) (int, int, []string) {
 	counter := 0
 	counterNotUsed := 0
 	wordsLeft := make([]string, 0)
+	uniqWords := make(map[string]bool)
+	uniqWordsNotUsed := make(map[string]bool)
 
 	for l1, w1 := range p.words.First {
 		if w1 == nil {
@@ -223,13 +225,17 @@ func (p *Progress) WordsLeft(list bool) (int, int, []string) {
 										}
 										if p.pos[4].valid(l5) {
 											if p.valid(l1, l2, l3, l4, l5) {
-												counter++
 												word := w5.Word
-												if !word.Used {
-													counterNotUsed++
-												}
 												if list {
 													wordsLeft = append(wordsLeft, word.Word)
+												}
+												if !uniqWords[word.WithoutDiacritics] {
+													uniqWords[word.WithoutDiacritics] = true
+													counter++
+												}
+												if !word.Used && !uniqWordsNotUsed[word.WithoutDiacritics] {
+													uniqWordsNotUsed[word.WithoutDiacritics] = true
+													counterNotUsed++
 												}
 											}
 										}
