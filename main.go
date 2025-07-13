@@ -67,9 +67,8 @@ func LoadLuck(filePath string) (map[string]*LuckStat, map[string]*odds.Skill, ma
 }
 
 func CalculateOdds(
-	word string,
-	all []string,
-	history map[string]bool,
+	word *dict.DictionaryWord,
+	all []*dict.DictionaryWord,
 	ppr *pr.Progress,
 ) (
 	float64, float64, *LuckStat,
@@ -80,34 +79,34 @@ func CalculateOdds(
 
 	luck.Histogram = make(map[int]int)
 
-	for _, w := range all {
+	for _, dw := range all {
 		var counter, counterNotUsed int
 
-		if dict.StripDiacritic(w) != word {
+		if dw.WithoutDiacritics != word.WithoutDiacritics {
 			pr := ppr.Clone()
 			pr.ResetRound()
 
-			pr.Guess(word, w)
+			pr.Guess(word.Word, dw.Word)
 
 			/*
 				if word == "jehne" {
 					var list []string
 					counter, counterNotUsed, list = pr.WordsLeft(true)
-					fmt.Printf("%s + %s: ", word, w)
+					fmt.Printf("%s + %s: ", word.Word, dw.Word)
 					fmt.Println(list)
 
 				} else {
 			*/
 			counter, counterNotUsed, _ = pr.WordsLeft(false)
-			if counterNotUsed == 0 && !history[w] {
-				panic(fmt.Sprintf("%s + %s: counter 0", word, w))
+			if counterNotUsed == 0 && !dw.Used {
+				panic(fmt.Sprintf("%s + %s: counter 0", word.Word, dw.Word))
 			}
 		}
 
 		sum += float64(counter)
 		count++
 
-		if !history[w] {
+		if !dw.Used {
 			luck.Histogram[counterNotUsed]++
 			luck.Sum++
 			sumNotUsed += float64(counterNotUsed)
@@ -289,7 +288,7 @@ func main() {
 
 		counter, counterNotUsed, wordsLeft := progress.WordsLeft(true)
 
-		if counter == 1 && dict.StripDiacritic(wordsLeft[0]) == guessedWord {
+		if counter == 1 && wordsLeft[0].WithoutDiacritics == guessedWord {
 			counter = 0
 			counterNotUsed = 0
 		}
@@ -307,12 +306,11 @@ func main() {
 			wordsLeftRobotWeighted := make([]odds.WeightedWord, len(wordsLeft))
 			wordsLeftHumanWeighted := make([]odds.WeightedWord, len(wordsLeft))
 
-			for j, slovo := range wordsLeft {
-				w := dict.StripDiacritic(slovo)
-				oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, wordsLeft, history, progress)
-				wordsLeftRobotWeighted[j] = odds.WeightedWord{slovo, oddsRobot}
-				wordsLeftHumanWeighted[j] = odds.WeightedWord{slovo, oddsHuman}
-				luck[w] = wordLuck
+			for j, dw := range wordsLeft {
+				oddsHuman, oddsRobot, wordLuck := CalculateOdds(dw, wordsLeft, progress)
+				wordsLeftRobotWeighted[j] = odds.WeightedWord{dw.Word, oddsRobot}
+				wordsLeftHumanWeighted[j] = odds.WeightedWord{dw.Word, oddsHuman}
+				luck[dw.WithoutDiacritics] = wordLuck
 			}
 
 			sort.Sort(odds.ByWeight(wordsLeftHumanWeighted))

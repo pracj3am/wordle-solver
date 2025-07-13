@@ -192,10 +192,10 @@ func (p *Progress) valid(indexes ...int) bool {
 	return true
 }
 
-func (p *Progress) WordsLeft(list bool) (int, int, []string) {
+func (p *Progress) WordsLeft(list bool) (int, int, []*dict.DictionaryWord) {
 	counter := 0
 	counterNotUsed := 0
-	wordsLeft := make([]string, 0)
+	wordsLeft := make([]*dict.DictionaryWord, 0)
 	uniqWords := make(map[string]bool)
 	uniqWordsNotUsed := make(map[string]bool)
 
@@ -225,16 +225,16 @@ func (p *Progress) WordsLeft(list bool) (int, int, []string) {
 										}
 										if p.pos[4].valid(l5) {
 											if p.valid(l1, l2, l3, l4, l5) {
-												word := w5.Word
+												dw := w5.Word
 												if list {
-													wordsLeft = append(wordsLeft, word.Word)
+													wordsLeft = append(wordsLeft, dw)
 												}
-												if !uniqWords[word.WithoutDiacritics] {
-													uniqWords[word.WithoutDiacritics] = true
+												if !uniqWords[dw.WithoutDiacritics] {
+													uniqWords[dw.WithoutDiacritics] = true
 													counter++
 												}
-												if !word.Used && !uniqWordsNotUsed[word.WithoutDiacritics] {
-													uniqWordsNotUsed[word.WithoutDiacritics] = true
+												if !dw.Used && !uniqWordsNotUsed[dw.WithoutDiacritics] {
+													uniqWordsNotUsed[dw.WithoutDiacritics] = true
 													counterNotUsed++
 												}
 											}
