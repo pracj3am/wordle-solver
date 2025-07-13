@@ -25,8 +25,7 @@ type Skills struct {
 
 func CalculateOdds(
 	word string,
-	all []string,
-	history map[string]bool,
+	all []dict.DictionaryWord,
 	ppr *pr.Progress,
 ) (
 	float64, float64, *LuckStat,
@@ -37,25 +36,25 @@ func CalculateOdds(
 
 	luck.Histogram = make(map[int]int)
 
-	for _, w := range all {
+	for _, dw := range all {
 		var counter, counterNotUsed int
 
-		if dict.StripDiacritic(w) != word {
+		if dw.WithoutDiacritics != word {
 			pr := ppr.Clone()
 			pr.ResetRound()
 
-			pr.Guess(word, w)
+			pr.Guess(word, dw.Word)
 			counter, counterNotUsed, _ = pr.WordsLeft(false)
 
-			if counterNotUsed == 0 && !history[w] {
-				panic(fmt.Sprintf("%s + %s: counter 0", word, w))
+			if counterNotUsed == 0 && !dw.Used {
+				panic(fmt.Sprintf("%s + %s: counter 0", word, dw.Word))
 			}
 		}
 
 		sum += float64(counter)
 		count++
 
-		if !history[w] {
+		if !dw.Used {
 			luck.Histogram[counterNotUsed]++
 			luck.Sum++
 			sumNotUsed += float64(counterNotUsed)
@@ -64,6 +63,25 @@ func CalculateOdds(
 	}
 
 	return sum / float64(count), sumNotUsed / float64(countNotUsed), &luck
+}
+
+func LoadSolutions(filePath string, history map[string]bool) ([]dict.DictionaryWord, error) {
+	words := make([]dict.DictionaryWord, 0, 2000)
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+
+	for s.Scan() {
+		words = append(words, dict.DictionaryWord{
+			Word:              s.Text(),
+			WithoutDiacritics: dict.StripDiacritic(s.Text()),
+			Used:              history[s.Text()],
+		})
+	}
+	return words, s.Err()
 }
 
 func LoadDictionary(filePath string) ([]string, error) {
@@ -94,7 +112,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	solutions, err := LoadDictionary("../db-hacky.txt")
+	solutions, err := LoadSolutions("../db-hacky.txt", history)
 	if err != nil {
 		fmt.Println("loading all words failed", err)
 		os.Exit(1)
@@ -116,7 +134,7 @@ func main() {
 		wordsLeftHumanWeighted := make([]odds.WeightedWord, len(all))
 
 		for j, w := range all {
-			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, solutions, history, progress)
+			oddsHuman, oddsRobot, wordLuck := CalculateOdds(w, solutions, progress)
 			wordsLeftRobotWeighted[j] = odds.WeightedWord{w, oddsRobot}
 			wordsLeftHumanWeighted[j] = odds.WeightedWord{w, oddsHuman}
 			luck[w] = wordLuck
