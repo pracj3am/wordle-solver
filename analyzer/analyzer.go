@@ -263,9 +263,11 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 			row.Luck = luckPct(luckMap[guess], counterNotUsed)
 		}
 		if skillMap != nil {
-			if sk, ok := skillMap[guess]; ok && sk.Difficulty > 0 {
-				row.Difficulty = sk.Difficulty
-				row.IQ = sk.Relative
+			if sk, ok := skillMap[guess]; ok {
+				row.Difficulty = sk.Difficulty // může být 0 (vynucený tah, zbývá 1 slovo) → ukáže se „0"
+				if sk.Difficulty > 0 {
+					row.IQ = sk.Relative // jinak IQ zůstane -1 → „–" (relativně se nehodnotí)
+				}
 			}
 		}
 		// seznamy zbývajících slov (možné odpovědi vs ostatní platná), dedup + cap
