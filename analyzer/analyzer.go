@@ -35,7 +35,12 @@ type Row struct {
 	Difficulty  int     `json:"difficulty"`  // -1 = "–"
 	IQ          int     `json:"iq"`          // 0..100, nebo -1
 	Luck        float64 `json:"luck"`        // %, nebo -1
+	Answers     []string `json:"answers"`    // zbývající možné odpovědi (cap, s diakritikou)
+	Others      []string `json:"others"`     // ostatní zbývající platná slova (cap)
 }
+
+// wordsCap = max. počet slov v každém seznamu (zbytek se zkrátí, frontend ukáže „…+N").
+const wordsCap = 200
 
 // Engine drží načtený slovník. Možné odpovědi (answers) mají Used=false,
 // ostatní platná slova Used=true (nejsou možné odpovědi).
@@ -257,6 +262,27 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 				row.Difficulty = sk.Difficulty
 				row.IQ = sk.Relative
 			}
+		}
+		// seznamy zbývajících slov (možné odpovědi vs ostatní platná), dedup + cap
+		if counter > 0 {
+			seen := make(map[string]bool, len(wordsLeft))
+			for _, dw := range wordsLeft {
+				if seen[dw.WithoutDiacritics] {
+					continue
+				}
+				seen[dw.WithoutDiacritics] = true
+				if dw.Used { // ostatní platná (není možná odpověď)
+					if len(row.Others) < wordsCap {
+						row.Others = append(row.Others, dw.Word)
+					}
+				} else { // možná odpověď
+					if len(row.Answers) < wordsCap {
+						row.Answers = append(row.Answers, dw.Word)
+					}
+				}
+			}
+			sort.Strings(row.Answers)
+			sort.Strings(row.Others)
 		}
 		rows = append(rows, row)
 		if counter == 0 {
