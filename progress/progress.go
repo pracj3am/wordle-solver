@@ -3,7 +3,7 @@ package progress
 import (
 	"slices"
 
-	"../dict"
+	"github.com/pracj3am/wordle-solver/dict"
 )
 
 // variable písmeno je s háčkama

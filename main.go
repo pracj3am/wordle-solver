@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"unicode/utf8"
 
-	"./dict"
-	"./odds"
-	pr "./progress"
+	"github.com/pracj3am/wordle-solver/dict"
+	"github.com/pracj3am/wordle-solver/odds"
+	pr "github.com/pracj3am/wordle-solver/progress"
 )
 
 const (

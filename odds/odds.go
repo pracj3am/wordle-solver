@@ -3,7 +3,7 @@ package odds
 import (
 	"math"
 
-	"../dict"
+	"github.com/pracj3am/wordle-solver/dict"
 )
 
 type Skill struct {
