@@ -5,7 +5,9 @@
 package analyzer
 
 import (
+	"bytes"
 	"encoding/gob"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -63,17 +65,32 @@ func loadDict(dictPath string, answers []string) (*dict.Dictionary, error) {
 	if err != nil {
 		return nil, err
 	}
+	return dict.LoadDictionary(dictPath, answersToHistory(all, answers))
+}
+
+// loadDictFromBytes je verze loadDict bez souborového systému (WASM): slovník se
+// předá jako bytes (čte se dvakrát, proto bytes.NewReader pokaždé znovu).
+func loadDictFromBytes(dictData []byte, answers []string) (*dict.Dictionary, error) {
+	all, err := dict.LoadHistoryFromReader(bytes.NewReader(dictData))
+	if err != nil {
+		return nil, err
+	}
+	return dict.LoadDictionaryFromReader(bytes.NewReader(dictData), answersToHistory(all, answers))
+}
+
+// answersToHistory vrací mapu Used=true pro slova, která NEJSOU možná odpověď.
+func answersToHistory(all map[string]bool, answers []string) map[string]bool {
 	ans := make(map[string]bool, len(answers))
 	for _, a := range answers {
 		ans[dict.StripDiacritic(a)] = true
 	}
-	history := make(map[string]bool) // Used = NENÍ možná odpověď
+	history := make(map[string]bool, len(all))
 	for w := range all {
 		if !ans[dict.StripDiacritic(w)] {
 			history[w] = true
 		}
 	}
-	return dict.LoadDictionary(dictPath, history)
+	return history
 }
 
 // NewEngine načte slovník; je-li luckPath != "" a soubor existuje, načte i
@@ -92,13 +109,34 @@ func NewEngine(dictPath, luckPath string, answers []string) (*Engine, error) {
 	return e, nil
 }
 
+// NewEngineFromBytes je verze NewEngine pro prostředí bez souborového systému (WASM):
+// slovník i luck.gob se předají jako bytes. luckData smí být prázdné (pak 1. tah „–").
+func NewEngineFromBytes(dictData, luckData []byte, answers []string) (*Engine, error) {
+	d, err := loadDictFromBytes(dictData, answers)
+	if err != nil {
+		return nil, err
+	}
+	e := &Engine{dict: d, OddsThreshold: defaultOddsThreshold}
+	if len(luckData) > 0 {
+		if luck, sr, sh, err := LoadLuckFromReader(bytes.NewReader(luckData)); err == nil {
+			e.luck, e.skillRobot, e.skillHuman = luck, sr, sh
+		}
+	}
+	return e, nil
+}
+
 func LoadLuck(path string) (map[string]*LuckStat, map[string]*odds.Skill, map[string]*odds.Skill, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	defer f.Close()
-	dec := gob.NewDecoder(f)
+	return LoadLuckFromReader(f)
+}
+
+// LoadLuckFromReader je verze LoadLuck čtoucí z io.Reader (WASM).
+func LoadLuckFromReader(r io.Reader) (map[string]*LuckStat, map[string]*odds.Skill, map[string]*odds.Skill, error) {
+	dec := gob.NewDecoder(r)
 	var luck map[string]*LuckStat
 	var sr, sh map[string]*odds.Skill
 	if err := dec.Decode(&luck); err != nil {

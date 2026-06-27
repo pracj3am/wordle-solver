@@ -2,6 +2,7 @@ package dict
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"unicode/utf8"
 )
@@ -151,15 +152,20 @@ type Dictionary struct {
 }
 
 func LoadDictionary(filePath string, history map[string]bool) (*Dictionary, error) {
-	var words Dictionary
-
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	return LoadDictionaryFromReader(f, history)
+}
 
-	s := bufio.NewScanner(f)
+// LoadDictionaryFromReader je verze LoadDictionary čtoucí z io.Reader (např. pro WASM,
+// kde není souborový systém — data se předají jako bytes).
+func LoadDictionaryFromReader(r io.Reader, history map[string]bool) (*Dictionary, error) {
+	var words Dictionary
+
+	s := bufio.NewScanner(r)
 
 	for s.Scan() {
 		word := s.Bytes()
@@ -205,15 +211,19 @@ func LoadDictionary(filePath string, history map[string]bool) (*Dictionary, erro
 }
 
 func LoadHistory(filePath string) (map[string]bool, error) {
-	words := make(map[string]bool)
-
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	return LoadHistoryFromReader(f)
+}
 
-	s := bufio.NewScanner(f)
+// LoadHistoryFromReader je verze LoadHistory čtoucí z io.Reader (viz LoadDictionaryFromReader).
+func LoadHistoryFromReader(r io.Reader) (map[string]bool, error) {
+	words := make(map[string]bool)
+
+	s := bufio.NewScanner(r)
 
 	for s.Scan() {
 		word := s.Text()
