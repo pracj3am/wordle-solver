@@ -17,9 +17,8 @@ import (
 	pr "github.com/pracj3am/wordle-solver/progress"
 )
 
-// oddsThreshold: nad tolik kandidátů se obtížnost/IQ nepočítá (kvadratický výpočet
-// by byl moc pomalý) → 1. tah obvykle vyjde jako "–", stejně jako v referenci.
-const oddsThreshold = 1000
+// defaultOddsThreshold = výchozí Engine.OddsThreshold (viz tam).
+const defaultOddsThreshold = 150
 
 // LuckStat = distribuce počtu zbylých možných odpovědí pro daný tip.
 type LuckStat struct {
@@ -50,6 +49,12 @@ type Engine struct {
 	luck       map[string]*LuckStat
 	skillRobot map[string]*odds.Skill
 	skillHuman map[string]*odds.Skill
+
+	// OddsThreshold: nad tolik kandidátů se obtížnost/IQ/luck (pro DALŠÍ tah) nepočítá
+	// živě — výpočet je ~O(N³) (calcOdds pro každé zbylé slovo), takže pro velký fond
+	// trvá na pomalém CPU desítky sekund. 1. tah má metriky z luck.gob, takže nevadí,
+	// že větší fondy vyjdou jako "–". Nastavitelné zvenčí (NewEngine dá default).
+	OddsThreshold int
 }
 
 // loadDict načte slovník s Used=true pro slova, která NEJSOU možná odpověď.
@@ -78,7 +83,7 @@ func NewEngine(dictPath, luckPath string, answers []string) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := &Engine{dict: d}
+	e := &Engine{dict: d, OddsThreshold: defaultOddsThreshold}
 	if luckPath != "" {
 		if luck, sr, sh, err := LoadLuck(luckPath); err == nil {
 			e.luck, e.skillRobot, e.skillHuman = luck, sr, sh
@@ -290,7 +295,7 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 		}
 
 		// metriky pro PŘÍŠTÍ tip nad zbývajícími slovy (když fond není moc velký)
-		if counter < oddsThreshold {
+		if counter < e.OddsThreshold {
 			weighted := make([]odds.WeightedWord, len(wordsLeft))
 			newLuck := make(map[string]*LuckStat, len(wordsLeft))
 			for i, dw := range wordsLeft {
