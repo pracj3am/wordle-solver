@@ -1,11 +1,16 @@
 // Package analyzer poskytuje analýzu odehrané hry (Wordle) jako knihovnu:
 // pro každý tip spočítá zbývající slova, obtížnost, "IQ" a štěstí.
-// Vše se počítá živě nad slovníkem (žádný předpočítaný luck.gob).
+// Metriky se počítají živě; pro 1. tah se použije předpočítaný luck.gob
+// (GenerateLuck → NewEngine s luckPath), bez něj má 1. tah difficulty/IQ "–".
 package analyzer
 
 import (
+	"encoding/gob"
+	"os"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/pracj3am/wordle-solver/dict"
 	"github.com/pracj3am/wordle-solver/odds"
@@ -34,11 +39,16 @@ type Row struct {
 
 // Engine drží načtený slovník. Možné odpovědi (answers) mají Used=false,
 // ostatní platná slova Used=true (nejsou možné odpovědi).
+// luck/skill* jsou předpočítané hodnoty pro 1. tah (z luck.gob), nebo nil.
 type Engine struct {
-	dict *dict.Dictionary
+	dict       *dict.Dictionary
+	luck       map[string]*LuckStat
+	skillRobot map[string]*odds.Skill
+	skillHuman map[string]*odds.Skill
 }
 
-func NewEngine(dictPath string, answers []string) (*Engine, error) {
+// loadDict načte slovník s Used=true pro slova, která NEJSOU možná odpověď.
+func loadDict(dictPath string, answers []string) (*dict.Dictionary, error) {
 	all, err := dict.LoadHistory(dictPath) // všechna slova ze souboru (s diakritikou)
 	if err != nil {
 		return nil, err
@@ -53,11 +63,102 @@ func NewEngine(dictPath string, answers []string) (*Engine, error) {
 			history[w] = true
 		}
 	}
-	d, err := dict.LoadDictionary(dictPath, history)
+	return dict.LoadDictionary(dictPath, history)
+}
+
+// NewEngine načte slovník; je-li luckPath != "" a soubor existuje, načte i
+// předpočítané luck.gob (pro 1. tah). Selhání načtení gobu není fatální.
+func NewEngine(dictPath, luckPath string, answers []string) (*Engine, error) {
+	d, err := loadDict(dictPath, answers)
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{dict: d}, nil
+	e := &Engine{dict: d}
+	if luckPath != "" {
+		if luck, sr, sh, err := LoadLuck(luckPath); err == nil {
+			e.luck, e.skillRobot, e.skillHuman = luck, sr, sh
+		}
+	}
+	return e, nil
+}
+
+func LoadLuck(path string) (map[string]*LuckStat, map[string]*odds.Skill, map[string]*odds.Skill, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer f.Close()
+	dec := gob.NewDecoder(f)
+	var luck map[string]*LuckStat
+	var sr, sh map[string]*odds.Skill
+	if err := dec.Decode(&luck); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := dec.Decode(&sr); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := dec.Decode(&sh); err != nil {
+		return nil, nil, nil, err
+	}
+	return luck, sr, sh, nil
+}
+
+// GenerateLuck předpočítá luck.gob pro 1. tah: pro každé slovo fondu spočítá
+// (paralelně) calcOdds nad celým fondem → histogram štěstí + váhy, z vah skill.
+func GenerateLuck(dictPath string, answers []string, outPath string) error {
+	d, err := loadDict(dictPath, answers)
+	if err != nil {
+		return err
+	}
+	base := pr.NewProgress(5, d)
+	_, _, all := base.WordsLeft(true) // všechna slova (bez omezení)
+
+	type result struct {
+		word         string
+		human, robot float64
+		luck         *LuckStat
+	}
+	results := make([]result, len(all))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, runtime.NumCPU())
+	for i, dw := range all {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, dw *dict.DictionaryWord) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			h, r, l := calcOdds(dw, all, base)
+			results[i] = result{dw.Word, h, r, l}
+		}(i, dw)
+	}
+	wg.Wait()
+
+	luck := make(map[string]*LuckStat, len(all))
+	robotW := make([]odds.WeightedWord, len(all))
+	humanW := make([]odds.WeightedWord, len(all))
+	for i, r := range results {
+		luck[dict.StripDiacritic(r.word)] = r.luck
+		robotW[i] = odds.WeightedWord{Word: r.word, Weight: r.robot}
+		humanW[i] = odds.WeightedWord{Word: r.word, Weight: r.human}
+	}
+	sort.Sort(odds.ByWeight(robotW))
+	skillRobot := odds.CalculateSkill(robotW)
+	sort.Sort(odds.ByWeight(humanW))
+	skillHuman := odds.CalculateSkill(humanW)
+
+	f, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	if err := enc.Encode(luck); err != nil {
+		return err
+	}
+	if err := enc.Encode(skillRobot); err != nil {
+		return err
+	}
+	return enc.Encode(skillHuman)
 }
 
 // calcOdds = port reference CalculateOdds: simuluje tip "word" proti každé možné
@@ -122,11 +223,11 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 	rows := make([]Row, 0, len(guesses))
 
 	// luckMap/skillMap = metriky pro AKTUÁLNÍ tip (spočítané na konci minulého kola)
-	var luckMap map[string]*LuckStat
-	var skillMap map[string]*odds.Skill
+	luckMap := e.luck        // z luck.gob (pokrývá 1. tah – luck i difficulty/IQ), nebo nil
+	skillMap := e.skillHuman
 
-	// 1. tip: štěstí nad plným fondem (difficulty/IQ "–" – fond je moc velký)
-	if len(guesses) > 0 {
+	// bez gobu: fallback – štěstí 1. tahu nad plným fondem (difficulty/IQ zůstane "–")
+	if luckMap == nil && len(guesses) > 0 {
 		_, _, full := progress.WordsLeft(true)
 		g0 := dict.StripDiacritic(guesses[0])
 		gw := &dict.DictionaryWord{Word: g0, WithoutDiacritics: g0}
