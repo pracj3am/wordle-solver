@@ -1,7 +1,5 @@
-// Package analyzer poskytuje analýzu odehrané hry (Wordle) jako knihovnu:
-// pro každý tip spočítá zbývající slova, obtížnost, "IQ" a štěstí.
-// Metriky se počítají živě; pro 1. tah se použije předpočítaný luck.gob
-// (GenerateLuck → NewEngine s luckPath), bez něj má 1. tah difficulty/IQ "–".
+// Package analyzer analyzuje odehranou hru (Wordle) jako knihovnu: pro každý
+// tip spočítá zbývající slova, obtížnost, "IQ" a štěstí. Viz CONTEXT.md.
 package analyzer
 
 import (
@@ -19,7 +17,7 @@ import (
 	pr "github.com/pracj3am/wordle-solver/progress"
 )
 
-// defaultOddsThreshold = výchozí Engine.OddsThreshold (viz tam).
+// defaultOddsThreshold = výchozí Engine.OddsThreshold.
 const defaultOddsThreshold = 150
 
 // LuckStat = distribuce počtu zbylých možných odpovědí pro daný tip.
@@ -43,19 +41,16 @@ type Row struct {
 // wordsCap = max. počet slov v každém seznamu (zbytek se zkrátí, frontend ukáže „…+N").
 const wordsCap = 200
 
-// Engine drží načtený slovník. Možné odpovědi (answers) mají Used=false,
-// ostatní platná slova Used=true (nejsou možné odpovědi).
-// luck/skill* jsou předpočítané hodnoty pro 1. tah (z luck.gob), nebo nil.
+// Engine drží načtený slovník a (volitelně) předpočítané hodnoty pro 1. tah
+// z luck.gob (jinak nil). Viz CONTEXT.md (Used, luck.gob).
 type Engine struct {
 	dict       *dict.Dictionary
 	luck       map[string]*LuckStat
 	skillRobot map[string]*odds.Skill
 	skillHuman map[string]*odds.Skill
 
-	// OddsThreshold: nad tolik kandidátů se obtížnost/IQ/luck (pro DALŠÍ tah) nepočítá
-	// živě — výpočet je ~O(N³) (calcOdds pro každé zbylé slovo), takže pro velký fond
-	// trvá na pomalém CPU desítky sekund. 1. tah má metriky z luck.gob, takže nevadí,
-	// že větší fondy vyjdou jako "–". Nastavitelné zvenčí (NewEngine dá default).
+	// OddsThreshold: nad tolik kandidátů se metriky pro DALŠÍ tah nepočítají živě
+	// (výpočet je ~O(N³)) a vyjdou jako "–". Viz CONTEXT.md.
 	OddsThreshold int
 }
 
@@ -68,8 +63,8 @@ func loadDict(dictPath string, answers []string) (*dict.Dictionary, error) {
 	return dict.LoadDictionary(dictPath, answersToHistory(all, answers))
 }
 
-// loadDictFromBytes je verze loadDict bez souborového systému (WASM): slovník se
-// předá jako bytes (čte se dvakrát, proto bytes.NewReader pokaždé znovu).
+// loadDictFromBytes je verze loadDict bez souborového systému (WASM); vstup se
+// čte dvakrát, proto bytes.NewReader pokaždé znovu.
 func loadDictFromBytes(dictData []byte, answers []string) (*dict.Dictionary, error) {
 	all, err := dict.LoadHistoryFromReader(bytes.NewReader(dictData))
 	if err != nil {
@@ -262,10 +257,8 @@ func luckPct(ls *LuckStat, counterNotUsed int) float64 {
 	return -1
 }
 
-// Analyze: pro každý tip (základní písmena bez diakritiky) spočítá metriky.
+// Analyze pro každý tip (základní písmena bez diakritiky) spočítá metriky.
 // solution = denní slovo (může mít diakritiku); zpětnou vazbu odvodí progress.Guess.
-// Věrně kopíruje smyčku referenčního CLI: metriky pro tip se počítají na konci
-// předchozího kola nad tehdy zbývajícími slovy.
 func (e *Engine) Analyze(guesses []string, solution string) []Row {
 	progress := pr.NewProgress(5, e.dict)
 	rows := make([]Row, 0, len(guesses))

@@ -88,15 +88,6 @@ func CalculateOdds(
 
 			pr.Guess(word.Word, dw.Word)
 
-			/*
-				if word == "jehne" {
-					var list []string
-					counter, counterNotUsed, list = pr.WordsLeft(true)
-					fmt.Printf("%s + %s: ", word.Word, dw.Word)
-					fmt.Println(list)
-
-				} else {
-			*/
 			counter, counterNotUsed, _ = pr.WordsLeft(false)
 			if counterNotUsed == 0 && !dw.Used {
 				panic(fmt.Sprintf("%s + %s: counter 0", word.Word, dw.Word))
