@@ -156,6 +156,23 @@ func AppendTip(
 	return append(tips, tip)
 }
 
+// sortByOdds seřadí kandidáty podle průměrného počtu slov, která po tipu zbydou
+// (menší = lepší). Při shodě rozhodne vyšší korpusová frekvence (freq.tsv),
+// při shodě i tam abeceda — aby bylo pořadí deterministické.
+// Primární klíč zůstává vzestupná váha, takže výstup smí jít rovnou do
+// odds.CalculateSkill (bere words[0] jako min a words[len-1] jako max).
+func sortByOdds(words []odds.WeightedWord, freq map[string]float64) {
+	sort.Slice(words, func(i, j int) bool {
+		if words[i].Weight != words[j].Weight {
+			return words[i].Weight < words[j].Weight
+		}
+		if fi, fj := freq[words[i].Word], freq[words[j].Word]; fi != fj {
+			return fi > fj
+		}
+		return words[i].Word < words[j].Word
+	})
+}
+
 func PrintResuts(tips []Tip) {
 	fmt.Println("Konec hry")
 	for i := range tips {
@@ -217,6 +234,13 @@ func main() {
 	if err != nil {
 		fmt.Println("loading luck failed", err)
 		os.Exit(1)
+	}
+
+	// frekvence jen dolaďuje pořadí při shodě vah — bez ní se dá hrát dál
+	freq, err := dict.LoadFrequencies("freq.tsv")
+	if err != nil {
+		fmt.Println("loading frequencies failed", err)
+		freq = make(map[string]float64)
 	}
 
 	tips := make([]Tip, 0)
@@ -304,17 +328,24 @@ func main() {
 				luck[dw.WithoutDiacritics] = wordLuck
 			}
 
-			sort.Sort(odds.ByWeight(wordsLeftHumanWeighted))
+			sortByOdds(wordsLeftHumanWeighted, freq)
 			skillHuman = odds.CalculateSkill(wordsLeftHumanWeighted)
 
-			sort.Sort(odds.ByWeight(wordsLeftRobotWeighted))
+			sortByOdds(wordsLeftRobotWeighted, freq)
 			skillRobot = odds.CalculateSkill(wordsLeftRobotWeighted)
 
+			// arf se čte PŘED připojením " ***" — jinak by klíč byl "tunel *** "
+			fmt.Printf("%-9s %10s %10s\n", "slovo", "zbyde", "arf")
 			for _, w := range wordsLeftRobotWeighted {
-				if history[w.Word] {
-					w.Word += " *** "
+				arf := "–" // slovo není ve freq.tsv (pokrývá jen ~1/3 slovníku)
+				if f, found := freq[w.Word]; found {
+					arf = fmt.Sprintf("%.2f", f)
 				}
-				fmt.Printf("%s %f\n", w.Word, w.Weight)
+				mark := ""
+				if history[w.Word] {
+					mark = " ***"
+				}
+				fmt.Printf("%s%-4s %10.6f %10s\n", w.Word, mark, w.Weight, arf)
 			}
 		}
 

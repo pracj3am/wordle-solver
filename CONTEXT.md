@@ -59,10 +59,30 @@ zanořeně a filtruje přes `valid`.
 
 | soubor         | obsah |
 |----------------|-------|
-| `db.txt`       | slovník bez diakritiky (~2862 slov) |
-| `db-hacky.txt` | slovník s diakritikou (~3003 slov) — používá CLI i analyzer |
+| `db.txt`       | slovník bez diakritiky (~2980 slov) — odvozený z `db-hacky.txt` (`StripDiacritic` + dedup) |
+| `db-hacky.txt` | slovník s diakritikou (~3122 slov) — používá CLI i analyzer |
 | `used.txt`     | již použitá denní slova („historie", s diakritikou) |
 | `luck.gob`     | předpočítané statistiky pro 1. tah (gob: `luck`, `skillRobot`, `skillHuman`) |
+| `freq.tsv`     | korpusové frekvence (`slovo ipm total arf`, ~998 slov) — jen rozřazuje shodné tipy, viz níže |
+
+## Pořadí nabídnutých tipů
+
+CLI po každém tahu vypíše zbývající slova seřazená podle **průměrného počtu slov,
+která po tipu zbydou** (`odds.WeightedWord.Weight`, menší = lepší). Vah je ale
+málo unikátních, takže shody jsou běžné — rozhodne pak **vyšší ARF** z `freq.tsv`
+(`main.sortByOdds`), a při shodě i tam abeceda, aby bylo pořadí deterministické
+(`sort.Sort` je nestabilní, dřív pořadí ve shodě kolísalo mezi běhy).
+
+- Frekvence se hledá podle **přesného akcentovaného tvaru**. Přes základní tvar
+  by byla nejednoznačná (`banka`/`baňka`, `látka`/`laťka`) a sedla by na cizí slovo.
+- Výpis má sloupce `slovo | zbyde | arf`, aby bylo pořadí ve shodě čitelné;
+  `***` = slovo už bylo použité (není možná odpověď). ARF se do mapy hledá
+  **před** připojením `***`, jinak by klíč byl `"tunel *** "` a vyšlo by `–`.
+- `freq.tsv` pokrývá jen ~1/3 slovníku; zbytek (včetně běžných slov jako `robot`
+  nebo `úterý`) se vypíše jako `–`, bere se jako 0 a ve shodě spadne na abecedu.
+- Primární klíč zůstává vzestupná váha, takže seřazený výsledek smí jít rovnou
+  do `odds.CalculateSkill` (ta bere `words[0]` jako min a `words[len-1]` jako max).
+- Chybějící `freq.tsv` není fatální — jen se degraduje na abecedu ve shodě.
 
 ## Klíčové pojmy: `Used`, odpovědi vs. platná slova
 
