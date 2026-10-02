@@ -5,12 +5,14 @@
 package analyzer
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/gob"
 	"io"
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -45,6 +47,22 @@ type Row struct {
 	Others          []string `json:"others"`          // ostatní zbývající platná slova (cap)
 }
 
+// IdealCand = kandidát na další tah „ideální hry" se skóre, podle kterého se vybírá.
+type IdealCand struct {
+	Word  string  `json:"word"`
+	Score float64 `json:"score"` // průměr zbylých možných odpovědí (robot váha), menší = lepší; -1 = nepočítáno
+	Freq  float64 `json:"freq"`  // korpusová frekvence (arf) – rozhoduje při shodě skóre
+}
+
+// IdealRow = jeden tah „ideální hry" (IdealGame): slovo + kolik slov po něm zbývá
+// + kandidáti na DALŠÍ tah seřazení podle skóre. Barvy dlaždic si odvodí frontend.
+type IdealRow struct {
+	Word        string      `json:"word"`
+	Left        int         `json:"left"`        // všechna platná zbývající slova
+	LeftAnswers int         `json:"leftAnswers"` // z toho možné odpovědi
+	Cands       []IdealCand `json:"cands"`       // kandidáti na další tah (dedup, seřazeni dle skóre, cap wordsCap)
+}
+
 // wordsCap = max. počet slov v každém seznamu (zbytek se zkrátí, frontend ukáže „…+N").
 const wordsCap = 200
 
@@ -56,6 +74,10 @@ type Engine struct {
 	luck       map[string]*LuckStat
 	skillRobot map[string]*odds.Skill
 	skillHuman map[string]*odds.Skill
+
+	// Freq = korpusová frekvence (arf) podle slova s diakritikou; používá ji
+	// IdealGame k rozhodnutí při shodě IQ. Prázdná mapa = bez rozlišení (0).
+	Freq map[string]float64
 
 	// OddsThreshold: nad tolik kandidátů se obtížnost/IQ/luck (pro DALŠÍ tah) nepočítá
 	// živě — výpočet je ~O(N³) (calcOdds pro každé zbylé slovo), takže pro velký fond
@@ -321,24 +343,7 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 		}
 		// seznamy zbývajících slov (možné odpovědi vs ostatní platná), dedup + cap
 		if counter > 0 {
-			seen := make(map[string]bool, len(wordsLeft))
-			for _, dw := range wordsLeft {
-				if seen[dw.WithoutDiacritics] {
-					continue
-				}
-				seen[dw.WithoutDiacritics] = true
-				if dw.Used { // ostatní platná (není možná odpověď)
-					if len(row.Others) < wordsCap {
-						row.Others = append(row.Others, dw.Word)
-					}
-				} else { // možná odpověď
-					if len(row.Answers) < wordsCap {
-						row.Answers = append(row.Answers, dw.Word)
-					}
-				}
-			}
-			sort.Strings(row.Answers)
-			sort.Strings(row.Others)
+			row.Answers, row.Others = splitWordsLeft(wordsLeft)
 		}
 		rows = append(rows, row)
 		if counter == 0 {
@@ -366,4 +371,117 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 		}
 	}
 	return rows
+}
+
+// ParseFrequencies načte korpusové frekvence z TSV (sloupce slovo\tipm\ttotal\tarf,
+// hlavička se přeskočí). Klíč = slovo s diakritikou, hodnota = arf. Do Engine.Freq.
+func ParseFrequencies(r io.Reader) (map[string]float64, error) {
+	freq := make(map[string]float64)
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		f := strings.Split(s.Text(), "\t")
+		if len(f) < 4 {
+			continue
+		}
+		arf, err := strconv.ParseFloat(f[3], 64)
+		if err != nil {
+			continue // hlavička nebo vadný řádek
+		}
+		freq[f[0]] = arf
+	}
+	return freq, s.Err()
+}
+
+// idealCap = nad tolik zbývajících slov je plný výběr (calcOdds pro každé) moc
+// drahý; padáme na nejfrekventovanější slovo. Týká se jen druhého tahu po slabém
+// prvním slově – dál fond rychle klesá.
+const idealCap = 1200
+
+// splitWordsLeft rozdělí zbývající slova na možné odpovědi (Used=false) a ostatní
+// platná (Used=true); dedup podle základu bez diakritiky, každý seznam cap na
+// wordsCap, seřazeno. Sdílí Analyze i IdealGame.
+func splitWordsLeft(wordsLeft []*dict.DictionaryWord) (answers, others []string) {
+	seen := make(map[string]bool, len(wordsLeft))
+	for _, dw := range wordsLeft {
+		if seen[dw.WithoutDiacritics] {
+			continue
+		}
+		seen[dw.WithoutDiacritics] = true
+		if dw.Used {
+			if len(others) < wordsCap {
+				others = append(others, dw.Word)
+			}
+		} else {
+			if len(answers) < wordsCap {
+				answers = append(answers, dw.Word)
+			}
+		}
+	}
+	sort.Strings(answers)
+	sort.Strings(others)
+	return
+}
+
+// IdealGame simuluje „ideální hru": 1. tah = firstGuess (slovo hráče), pak vždy
+// tah s nejvyšším IQ (= nejnižší robot váha, průměr zbylých možných odpovědí);
+// při shodě rozhodne vyšší korpusová frekvence (Engine.Freq), pak abeceda.
+// Vrací tahy + počet zbylých slov; barvy si frontend dopočítá proti řešení.
+func (e *Engine) IdealGame(firstGuess, solution string) []IdealRow {
+	progress := pr.NewProgress(5, e.dict)
+	var rows []IdealRow
+	guess := dict.StripDiacritic(firstGuess)
+	for round := 0; round < 6 && guess != ""; round++ {
+		progress.ResetRound()
+		progress.Guess(guess, solution)
+		counter, counterNotUsed, wordsLeft := progress.WordsLeft(true)
+		if counter == 1 && len(wordsLeft) > 0 && wordsLeft[0].WithoutDiacritics == guess {
+			counter, counterNotUsed = 0, 0 // tip byl řešení
+		}
+		row := IdealRow{Word: strings.ToUpper(guess), Left: counter, LeftAnswers: counterNotUsed}
+		if counter == 0 {
+			rows = append(rows, row)
+			break
+		}
+		cands := e.rankCandidates(wordsLeft, progress)
+		if len(cands) > wordsCap {
+			row.Cands = cands[:wordsCap]
+		} else {
+			row.Cands = cands
+		}
+		rows = append(rows, row)
+		guess = dict.StripDiacritic(cands[0].Word) // nejvyšší IQ = nejnižší skóre
+	}
+	return rows
+}
+
+// rankCandidates seřadí zbývající slova podle skóre výběru dalšího tahu: robot váha
+// (průměr zbylých možných odpovědí, menší = lepší), při shodě vyšší Freq, pak abeceda.
+// Kandidáti se deduplikují podle základu (tipuje se bez diakritiky), ale skóre se
+// průměruje přes celý wordsLeft. Nad idealCap se robot váha nepočítá (moc drahé) –
+// řadí jen podle Freq a Score zůstane -1.
+func (e *Engine) rankCandidates(wordsLeft []*dict.DictionaryWord, progress *pr.Progress) []IdealCand {
+	scored := len(wordsLeft) <= idealCap
+	seen := make(map[string]bool, len(wordsLeft))
+	var cands []IdealCand
+	for _, dw := range wordsLeft {
+		if seen[dw.WithoutDiacritics] {
+			continue
+		}
+		seen[dw.WithoutDiacritics] = true
+		score := -1.0
+		if scored {
+			_, score, _ = calcOdds(dw, wordsLeft, progress)
+		}
+		cands = append(cands, IdealCand{Word: dw.Word, Score: score, Freq: e.Freq[dw.Word]})
+	}
+	sort.SliceStable(cands, func(i, j int) bool {
+		if scored && cands[i].Score != cands[j].Score {
+			return cands[i].Score < cands[j].Score
+		}
+		if cands[i].Freq != cands[j].Freq {
+			return cands[i].Freq > cands[j].Freq
+		}
+		return cands[i].Word < cands[j].Word
+	})
+	return cands
 }
