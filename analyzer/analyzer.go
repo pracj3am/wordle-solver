@@ -29,15 +29,20 @@ type LuckStat struct {
 }
 
 // Row = výsledek analýzy jednoho tipu. -1 znamená "nedostupné" ("–").
+// Skill (IQ/difficulty) je k dispozici ve dvou variantách; frontend si vybere:
+//   - robot = jen přes možné odpovědi (Used=false)
+//   - human = přes všechna platná slova (Used=true i false)
 type Row struct {
-	Word        string  `json:"word"`
-	Left        int     `json:"left"`        // všechna platná zbývající slova
-	LeftAnswers int     `json:"leftAnswers"` // z toho možné odpovědi
-	Difficulty  int     `json:"difficulty"`  // -1 = "–"
-	IQ          int     `json:"iq"`          // 0..100, nebo -1
-	Luck        float64 `json:"luck"`        // %, nebo -1
-	Answers     []string `json:"answers"`    // zbývající možné odpovědi (cap, s diakritikou)
-	Others      []string `json:"others"`     // ostatní zbývající platná slova (cap)
+	Word            string   `json:"word"`
+	Left            int      `json:"left"`            // všechna platná zbývající slova
+	LeftAnswers     int      `json:"leftAnswers"`     // z toho možné odpovědi
+	Difficulty      int      `json:"difficulty"`      // robot; -1 = "–"
+	IQ              int      `json:"iq"`              // robot; 0..100, nebo -1
+	DifficultyHuman int      `json:"difficultyHuman"` // human; -1 = "–"
+	IQHuman         int      `json:"iqHuman"`         // human; 0..100, nebo -1
+	Luck            float64  `json:"luck"`            // %, nebo -1
+	Answers         []string `json:"answers"`         // zbývající možné odpovědi (cap, s diakritikou)
+	Others          []string `json:"others"`          // ostatní zbývající platná slova (cap)
 }
 
 // wordsCap = max. počet slov v každém seznamu (zbytek se zkrátí, frontend ukáže „…+N").
@@ -270,9 +275,11 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 	progress := pr.NewProgress(5, e.dict)
 	rows := make([]Row, 0, len(guesses))
 
-	// luckMap/skillMap = metriky pro AKTUÁLNÍ tip (spočítané na konci minulého kola)
-	luckMap := e.luck        // z luck.gob (pokrývá 1. tah – luck i difficulty/IQ), nebo nil
-	skillMap := e.skillHuman
+	// luckMap/skill*Map = metriky pro AKTUÁLNÍ tip (spočítané na konci minulého kola).
+	// Držíme oba skilly, ať si frontend může vybrat robot i human IQ.
+	luckMap := e.luck // z luck.gob (pokrývá 1. tah – luck i difficulty/IQ), nebo nil
+	skillRobotMap := e.skillRobot
+	skillHumanMap := e.skillHuman
 
 	// bez gobu: fallback – štěstí 1. tahu nad plným fondem (difficulty/IQ zůstane "–")
 	if luckMap == nil && len(guesses) > 0 {
@@ -296,16 +303,20 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 		}
 
 		row := Row{Word: strings.ToUpper(guess), Left: counter, LeftAnswers: counterNotUsed,
-			Difficulty: -1, IQ: -1, Luck: -1}
+			Difficulty: -1, IQ: -1, DifficultyHuman: -1, IQHuman: -1, Luck: -1}
 		if luckMap != nil {
 			row.Luck = luckPct(luckMap[guess], counterNotUsed)
 		}
-		if skillMap != nil {
-			if sk, ok := skillMap[guess]; ok {
-				row.Difficulty = sk.Difficulty // může být 0 (vynucený tah, zbývá 1 slovo) → ukáže se „0"
-				if sk.Difficulty > 0 {
-					row.IQ = sk.Relative // jinak IQ zůstane -1 → „–" (relativně se nehodnotí)
-				}
+		if sk, ok := skillRobotMap[guess]; ok {
+			row.Difficulty = sk.Difficulty
+			if sk.Difficulty > 0 {
+				row.IQ = sk.Relative
+			}
+		}
+		if sk, ok := skillHumanMap[guess]; ok {
+			row.DifficultyHuman = sk.Difficulty
+			if sk.Difficulty > 0 {
+				row.IQHuman = sk.Relative
 			}
 		}
 		// seznamy zbývajících slov (možné odpovědi vs ostatní platná), dedup + cap
@@ -336,18 +347,22 @@ func (e *Engine) Analyze(guesses []string, solution string) []Row {
 
 		// metriky pro PŘÍŠTÍ tip nad zbývajícími slovy (když fond není moc velký)
 		if counter < e.OddsThreshold {
-			weighted := make([]odds.WeightedWord, len(wordsLeft))
+			robotW := make([]odds.WeightedWord, len(wordsLeft))
+			humanW := make([]odds.WeightedWord, len(wordsLeft))
 			newLuck := make(map[string]*LuckStat, len(wordsLeft))
 			for i, dw := range wordsLeft {
-				human, _, ls := calcOdds(dw, wordsLeft, progress)
-				weighted[i] = odds.WeightedWord{Word: dw.Word, Weight: human}
+				human, robot, ls := calcOdds(dw, wordsLeft, progress)
+				robotW[i] = odds.WeightedWord{Word: dw.Word, Weight: robot}
+				humanW[i] = odds.WeightedWord{Word: dw.Word, Weight: human}
 				newLuck[dw.WithoutDiacritics] = ls
 			}
-			sort.Sort(odds.ByWeight(weighted))
-			skillMap = odds.CalculateSkill(weighted)
+			sort.Sort(odds.ByWeight(robotW))
+			skillRobotMap = odds.CalculateSkill(robotW)
+			sort.Sort(odds.ByWeight(humanW))
+			skillHumanMap = odds.CalculateSkill(humanW)
 			luckMap = newLuck
 		} else {
-			luckMap, skillMap = nil, nil
+			luckMap, skillRobotMap, skillHumanMap = nil, nil, nil
 		}
 	}
 	return rows
