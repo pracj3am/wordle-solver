@@ -60,6 +60,7 @@ type IdealRow struct {
 	Word        string      `json:"word"`
 	Left        int         `json:"left"`        // všechna platná zbývající slova
 	LeftAnswers int         `json:"leftAnswers"` // z toho možné odpovědi
+	Luck        float64     `json:"luck"`        // % štěstí tahu (viz luckPct); -1 = nedostupné
 	Cands       []IdealCand `json:"cands"`       // kandidáti na další tah (dedup, seřazeni dle skóre, cap wordsCap)
 }
 
@@ -429,6 +430,7 @@ func splitWordsLeft(wordsLeft []*dict.DictionaryWord) (answers, others []string)
 func (e *Engine) IdealGame(firstGuess, solution string) []IdealRow {
 	progress := pr.NewProgress(5, e.dict)
 	var rows []IdealRow
+	luckMap := e.luck // 1. tah z luck.gob; další kola z rankCandidates
 	guess := dict.StripDiacritic(firstGuess)
 	for round := 0; round < 6 && guess != ""; round++ {
 		progress.ResetRound()
@@ -437,12 +439,15 @@ func (e *Engine) IdealGame(firstGuess, solution string) []IdealRow {
 		if counter == 1 && len(wordsLeft) > 0 && wordsLeft[0].WithoutDiacritics == guess {
 			counter, counterNotUsed = 0, 0 // tip byl řešení
 		}
-		row := IdealRow{Word: strings.ToUpper(guess), Left: counter, LeftAnswers: counterNotUsed}
+		row := IdealRow{Word: strings.ToUpper(guess), Left: counter, LeftAnswers: counterNotUsed, Luck: -1}
+		if luckMap != nil {
+			row.Luck = luckPct(luckMap[guess], counterNotUsed)
+		}
 		if counter == 0 {
 			rows = append(rows, row)
 			break
 		}
-		cands := e.rankCandidates(wordsLeft, progress)
+		cands, nextLuck := e.rankCandidates(wordsLeft, progress)
 		if len(cands) > wordsCap {
 			row.Cands = cands[:wordsCap]
 		} else {
@@ -450,6 +455,7 @@ func (e *Engine) IdealGame(firstGuess, solution string) []IdealRow {
 		}
 		rows = append(rows, row)
 		guess = dict.StripDiacritic(cands[0].Word) // nejvyšší IQ = nejnižší skóre
+		luckMap = nextLuck
 	}
 	return rows
 }
@@ -459,10 +465,14 @@ func (e *Engine) IdealGame(firstGuess, solution string) []IdealRow {
 // Kandidáti se deduplikují podle základu (tipuje se bez diakritiky), ale skóre se
 // průměruje přes celý wordsLeft. Nad idealCap se robot váha nepočítá (moc drahé) –
 // řadí jen podle Freq a Score zůstane -1.
-func (e *Engine) rankCandidates(wordsLeft []*dict.DictionaryWord, progress *pr.Progress) []IdealCand {
+func (e *Engine) rankCandidates(wordsLeft []*dict.DictionaryWord, progress *pr.Progress) ([]IdealCand, map[string]*LuckStat) {
 	scored := len(wordsLeft) <= idealCap
 	seen := make(map[string]bool, len(wordsLeft))
 	var cands []IdealCand
+	var luck map[string]*LuckStat // štěstí příštího tahu nad wordsLeft (nil nad idealCap)
+	if scored {
+		luck = make(map[string]*LuckStat, len(wordsLeft))
+	}
 	for _, dw := range wordsLeft {
 		if seen[dw.WithoutDiacritics] {
 			continue
@@ -470,7 +480,9 @@ func (e *Engine) rankCandidates(wordsLeft []*dict.DictionaryWord, progress *pr.P
 		seen[dw.WithoutDiacritics] = true
 		score := -1.0
 		if scored {
-			_, score, _ = calcOdds(dw, wordsLeft, progress)
+			var ls *LuckStat
+			_, score, ls = calcOdds(dw, wordsLeft, progress)
+			luck[dw.WithoutDiacritics] = ls
 		}
 		cands = append(cands, IdealCand{Word: dw.Word, Score: score, Freq: e.Freq[dw.Word]})
 	}
@@ -483,5 +495,5 @@ func (e *Engine) rankCandidates(wordsLeft []*dict.DictionaryWord, progress *pr.P
 		}
 		return cands[i].Word < cands[j].Word
 	})
-	return cands
+	return cands, luck
 }
